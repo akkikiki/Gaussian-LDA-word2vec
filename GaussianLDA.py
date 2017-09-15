@@ -23,9 +23,11 @@ class Wishart(object):
 
         self.nu = word_vecs.shape[1] #len of columns
         self.kappa = 0.01
-        self.psi = np.sum(word_vecs.T.dot(word_vecs), axis=0) # should this be np.sum(x.dot(x.T)))??? also changed this to x.T.dot(x)
+        #self.psi = np.sum(word_vecs.T.dot(word_vecs), axis=0) # should this be np.sum(x.dot(x.T)))??? also changed this to x.T.dot(x)
+        self.psi = np.eye(50) # should this be np.sum(x.dot(x.T)))??? also changed this to x.T.dot(x)
+        #print(str(np.allclose(self.psi, self.psi.T, atol=1e-8)))
         self.mu = np.mean(word_vecs, axis=0)
-        print "psi shape", self.psi.shape
+        #print( "psi shape", self.psi.shape)
 
 
 
@@ -60,16 +62,16 @@ class Gauss_LDA(object):
             for word in words:
                 self.vocab.add(word)
         self.corpus = temp_corpus
-        print "Done processing corpus with {} documents".format(len(documents))
+        print( "Done processing corpus with {} documents".format(len(documents)))
 
 
     def process_wordvectors(self, filepath):
-        print "Processing word-vectors, this takes a moment"
+        print( "Processing word-vectors, this takes a moment")
 
-        vectors = gensim.models.Word2Vec.load_word2vec_format(fname=filepath, binary=False)
+        vectors = gensim.models.KeyedVectors.load_word2vec_format(fname=filepath, binary=False)
         useable_vocab = 0
         unusable_vocab = 0
-        self.word_vec_size = vectors.vector_size
+        self.word_vec_size = 50
 
         for word in self.vocab:
             try:
@@ -77,8 +79,8 @@ class Gauss_LDA(object):
                 useable_vocab += 1
             except KeyError: unusable_vocab += 1
 
-        print "There are {0} words that could be convereted to word vectors in your corpus \n" \
-              "There are {1} words that could NOT be converted to word vectors".format(useable_vocab, unusable_vocab)
+        print( "There are {0} words that could be convereted to word vectors in your corpus \n" \
+              "There are {1} words that could NOT be converted to word vectors".format(useable_vocab, unusable_vocab))
 
         # self.word_vecs = np.zeros((useable_vocab, vectors.vector_size))
         index = 0
@@ -87,7 +89,7 @@ class Gauss_LDA(object):
                 self.word_vecs[word] = vectors[word]
                 index += 1
             except KeyError: continue
-        print "Word-vectors for the corpus are created"
+        print( "Word-vectors for the corpus are created")
 
 
     def fit(self, iterations=1, init=True): #set hyperparams here?
@@ -95,10 +97,10 @@ class Gauss_LDA(object):
             self.init()
             init = False
 
-        print "Starting fit"
-        for i in xrange(iterations):
+        print( "Starting fit")
+        for i in range(iterations):
             self.sample()
-            print "{} iterations complete".format(i)
+            print( "{} iterations complete".format(i))
 
     def init(self):
 
@@ -110,7 +112,7 @@ class Gauss_LDA(object):
 
         self.word_topics = {word: random.choice(range(self.numtopics)) for word in self.vocab}
         # get Doc-Topic Counts
-        for docID, doc in self.corpus.iteritems():
+        for docID, doc in self.corpus.items():
             for word in doc:
                 topicID = self.word_topics[word]
                 self.doc_topic_CT[docID, topicID] += 1
@@ -119,15 +121,15 @@ class Gauss_LDA(object):
         for k in range(self.numtopics):
             self.recalculate_topic_params(k)
 
-        print "Intialization complete"
+        print( "Intialization complete")
     def sample(self, init=True):
 
-        print "sampling started"
+        print( "sampling started")
         # Randomly assign word to topics
         if init == False:
             self.word_topics = {word: random.choice(range(self.numtopics)) for word in self.vocab}
 
-        for docID, doc in self.corpus.iteritems():
+        for docID, doc in self.corpus.items():
             for word in doc:
                 #subtracting info about current word-topic assignment from doc-topic count table
                 topic_id = self.word_topics[word]
@@ -141,13 +143,18 @@ class Gauss_LDA(object):
                     # Count of topic in doc
                     Nkd = self.doc_topic_CT[docID, k]
                     log_posterior = log(Nkd + self.alpha) * log_prob
+                    #print("Nkd + alpha = %.4f" % (Nkd + self.alpha))
+                    #print("log_prob = %.4f" % (log_prob))
                     posterior.append(log_posterior)
                     #doing this for some normalization scheme
                     if log_posterior > max: max = log_posterior
 
                 normalized_posterior = [exp(i-max) for i in posterior]
-                print np.sum(posterior)
-                print np.random.multinomial(1, pvals=posterior)
+                #print( posterior) 
+                #print( normalized_posterior) 
+                #print( np.random.multinomial(1, pvals=posterior))
+                print("topic dist for word: %s" % word)
+                print( np.random.multinomial(1, pvals=normalized_posterior))
                 ## need to copy the normalization scheme from Util.sample
         init = False
         return None
@@ -168,10 +175,21 @@ class Gauss_LDA(object):
         LLcomp = centered.T.dot(inv_cov).dot(centered)
         d = self.word_vec_size
         nu = self.priors.nu + Nk - d + 1
+        #print(nu)
 
         log_prop = gammaln(nu + d / 2) - \
                    (gammaln(nu / 2) + d/2 * (log(nu) + log(pi)) +0.5 * log(cov_det) + (nu + d) / 2 * log(1 + LLcomp / nu))
-
+        #print("debugging...")
+        #print(LLcomp)
+        #print(gammaln(nu + d / 2))
+        #print(gammaln(nu / 2) + d/2 * (log(nu) + log(pi)))
+        #print(0.5 * log(cov_det))
+        #print((nu + d))
+        #print(2 * log(1 + LLcomp / nu))
+        #print(log(LLcomp / nu))
+        #print(1 + LLcomp)
+        #print(1 + LLcomp / nu)
+        
         return log_prop
         # logprob = Gamma.logGamma((nu + Data.D)/2) - \
         #           (Gamma.logGamma(nu/2) + Data.D/2 * (Math.log(nu)+Math.log(Math.PI)) + 0.5 * Math.log(det) + (nu + Data.D)/2* Math.log(1+val/nu))
@@ -186,11 +204,13 @@ class Gauss_LDA(object):
         scaled_topic_mean_K, scaled_topic_cov_K  = self.get_scaled_topic_mean_cov(topic_id) # V-Bar_k and C_k
 
         vk_mu = scaled_topic_mean_K - self.priors.mu #V-bar_k - Mu
-        print self.priors.psi
+        #print( self.priors.psi)
         psi_k = self.priors.psi + scaled_topic_cov_K + ((self.priors.kappa * topic_count) / kappa_k) * (vk_mu.T.dot(vk_mu)) # Psi_k
+        #print( psi_k)
 
         topic_mean = (self.priors.kappa * self.priors.mu + topic_count * scaled_topic_mean_K) / kappa_k # Mu_k
         topic_cov = psi_k / (nu_k - self.word_vec_size + 1) # Sigma_k
+        print("topic_cov = %s" % str(np.linalg.det(topic_cov)))
 
         self.topic_params[topic_id]["Topic Count"] = topic_count
         self.topic_params[topic_id]["Topic Kappa"] = kappa_k
@@ -207,28 +227,30 @@ class Gauss_LDA(object):
         'mean of word vecs in a topic'
         # get words assigned to topic_id
         word_vecs = []
-        for word, topic in self.word_topics.iteritems():
+        for word, topic in self.word_topics.items():
             if topic == topic_id:
                 word_vecs.append(self.word_vecs[word])
-        print word_vecs
+        #print( word_vecs)
         word_vecs = np.vstack(word_vecs)
-        print word_vecs.shape
-        print np.sum(word_vecs, axis=0)
-        print np.sum(self.doc_topic_CT[:, topic_id], axis=0)
+        #print( word_vecs.shape)
+        #print( np.sum(word_vecs, axis=0))
+        #print( np.sum(self.doc_topic_CT[:, topic_id], axis=0))
         mean = np.sum(word_vecs, axis=0) / (np.sum(self.doc_topic_CT[:, topic_id], axis=0) + 2) #added a small number here to stop overflow
 
         # mean_centered = np.sum(word_vecs, axis=0) - mean
         mean_centered = word_vecs - mean
-        print self.doc_topic_CT
-        print mean
-        print mean_centered
+        #print( self.doc_topic_CT)
+        #print( mean)
+        #print( mean_centered)
 
         cov = mean_centered.T.dot(mean_centered)
         return mean, cov
 
 if __name__ == "__main__":
-    corpus = ["apple orange mango melon", "dog cat bird rat"]
-    wordvec_fileapth = "/Users/michael/Documents/Gaussian_LDA-master/data/glove.wiki/glove.6B.50d.txt"
-    g = Gauss_LDA(2, corpus, wordvec_fileapth )
-    g.fit(2)
-    # print g.topic_params[1]["Topic Count"]
+    corpus = ["apple orange mango melon", "dog cat bird rat", "love eat rice"]
+    #wordvec_fileapth = "/Users/michael/Documents/Gaussian_LDA-master/data/glove.wiki/glove.6B.50d.txt"
+    wordvec_fileapth = "/Users/yoshinarifujinuma/work/Gaussian_LDA/glove.6B.50d.txt"
+    g = Gauss_LDA(3, corpus, wordvec_fileapth )
+    #g.fit(2)
+    g.fit(50)
+    # print( g.topic_params[1]["Topic Count"]
